@@ -1,5 +1,5 @@
 # Smart Intercom project
-# https://github.com/Anonym-tsk/smart-domofon/tree/master/esphome
+# https://github.com/Ge1mer/domofon/
 
 ############# User configuration #############
 
@@ -86,7 +86,7 @@ status_led:
 
 api:
   password: $api_password
-  reboot_timeout: 0s
+#  reboot_timeout: 0s
   services:
     # Accept call service for Home Assistant
     - service: accept_call
@@ -171,12 +171,12 @@ script:
           condition:
             switch.is_on: auto_open_once
           then:
-            script.execute: led_blink_green_1_once
+            script.execute: led_green_soft
       - if:
           condition:
             switch.is_on: auto_open
           then:
-            script.execute: led_green_on_soft
+            script.execute: led_yellow_soft
       - if:
           condition:
             switch.is_on: auto_reject
@@ -223,7 +223,7 @@ script:
             - switch.turn_off: auto_open_once
 
   # Once blink green led with one flash
-  - id: led_blink_green_1_once
+  - id: led_green_soft
     then:
       - light.turn_on:
           id: rgb_led
@@ -232,16 +232,15 @@ script:
           green: 100%
           blue: 0%
           transition_length: 100ms
-      - delay: 200ms
-      - script.execute: led_off
+
 
   # Permanent on green led with soft brightness
-  - id: led_green_on_soft
+  - id: led_yellow_soft
     then:
       light.turn_on:
         id: rgb_led
         brightness: 50%
-        red: 0%
+        red: 100%
         green: 100%
         blue: 0%
         transition_length: 100ms
@@ -265,7 +264,7 @@ script:
         brightness: 50%
         red: 100%
         green: 0%
-        blue: 0%
+        blue: 100%
         transition_length: 100ms
         
 
@@ -482,7 +481,7 @@ binary_sensor:
               - switch.turn_off: auto_open
               - switch.turn_off: auto_open_once
               - switch.turn_off: auto_reject
-              - script.execute: led_blink_green_1_once
+              - script.execute: led_green_soft
 sensor:
   - platform: wifi_signal
     name: "Domofon WiFi Signal"
@@ -512,4 +511,4 @@ text_sensor:
       }
     update_interval: 60s
     icon: mdi:clock-start
- 
+    
