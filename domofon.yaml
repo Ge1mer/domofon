@@ -31,7 +31,7 @@ substitutions:
   # Software configuration
   call_end_detect_delay: 3000ms     # Interval between rings to detect incoming call
   relay_before_answer_delay: 10ms   # Delay before answer call
-  relay_answer_on_time: 1500ms      # Delay between answer call and open/close door
+  relay_answer_on_time: 1000ms      # Delay between answer call and open/close door
   relay_open_on_time: 3000ms         # How long the "open door button" will be pressed
   relay_after_open_delay: 500ms     # Delay in "answer" state after opening door
   short_click_time_from: 50ms       # Short button click min time
@@ -64,10 +64,10 @@ wifi:
   password: $wifi_password
   fast_connect: on
   
-#  manual_ip:
-#    static_ip: 192.168.1.128
-#    gateway: 192.168.1.1
-#    subnet: 255.255.255.0
+  manual_ip:
+    static_ip: 192.168.1.128
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
   
   ap:
     ssid: $ap_ssid
@@ -95,14 +95,13 @@ api:
         - if:
             condition:
               binary_sensor.is_on: incoming_call
-#            then: !lambda |-
-#              if (id(mute_mode)) { 
-#              script.execute: call_accept; 
-#              }else {
-#              script.execute: call_accept_mute;
-#              }
             then: 
-              script.execute: call_accept  
+              lambda: |-
+                if (id(mute_mode)) { id(call_accept_mute).execute(); # скрипт открытия разный для беззвучного режима и обычного
+                }else { id(call_accept).execute();
+                }
+#            then: 
+#              script.execute: call_accept  
             else:
               logger.log: "No incoming call"
 
@@ -120,7 +119,7 @@ api:
 
 script:
   # Accept incoming call
-  - id: call_accept
+  - id: call_accept   #скрипт открытия в обычном режиме
     then:
       - logger.log: "Accept call"
       - script.execute: state_no_call
@@ -133,7 +132,7 @@ script:
       - output.turn_on: relay_phone    # включаем трубку
   
   
-  - id: call_accept_mute
+  - id: call_accept_mute   #скрипт открытия в беззвучном режиме
     then:
       - logger.log: "Accept call"
       - script.execute: state_no_call
@@ -149,7 +148,7 @@ script:
 
 
   # Reject incoming call
-  - id: call_reject
+  - id: call_reject     #скрипт отбоя звонка
     then:
       - logger.log: "Reject call"
       - script.execute: state_no_call
@@ -213,12 +212,20 @@ script:
           condition:
             switch.is_on: auto_open
           then:
-            script.execute: call_accept
+            lambda: |-
+              if (id(mute_mode)) { id(call_accept_mute).execute(); # скрипт открытия разный для беззвучного режима и обычного
+              }else { id(call_accept).execute();
+              }
+#            script.execute: call_accept
       - if:
           condition:
             switch.is_on: auto_open_once
           then:
-            - script.execute: call_accept
+            - lambda: |-
+                if (id(mute_mode)) { id(call_accept_mute).execute(); # скрипт открытия разный для беззвучного режима и обычного
+                }else { id(call_accept).execute();
+                }          
+#            - script.execute: call_accept
             - delay: 1s
             - switch.turn_off: auto_open_once
 
@@ -512,3 +519,5 @@ text_sensor:
     update_interval: 60s
     icon: mdi:clock-start
     
+
+  
