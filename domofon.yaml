@@ -97,7 +97,7 @@ api:
               binary_sensor.is_on: incoming_call
             then: 
               lambda: |-
-                if (id(mute_mode)) { id(call_accept_mute).execute(); # скрипт открытия разный для беззвучного режима и обычного
+                if (id(mute_mode)) { id(call_accept_mute).execute(); 
                 }else { id(call_accept).execute();
                 }
 #            then: 
@@ -119,7 +119,7 @@ api:
 
 script:
   # Accept incoming call
-  - id: call_accept   #скрипт открытия в обычном режиме
+  - id: call_accept
     then:
       - logger.log: "Accept call"
       - script.execute: state_no_call
@@ -132,7 +132,7 @@ script:
       - output.turn_on: relay_phone    # включаем трубку
   
   
-  - id: call_accept_mute   #скрипт открытия в беззвучном режиме
+  - id: call_accept_mute
     then:
       - logger.log: "Accept call"
       - script.execute: state_no_call
@@ -148,7 +148,7 @@ script:
 
 
   # Reject incoming call
-  - id: call_reject     #скрипт отбоя звонка
+  - id: call_reject
     then:
       - logger.log: "Reject call"
       - script.execute: state_no_call
@@ -212,17 +212,17 @@ script:
           condition:
             switch.is_on: auto_open
           then:
-            lambda: |-
-              if (id(mute_mode)) { id(call_accept_mute).execute(); # скрипт открытия разный для беззвучного режима и обычного
-              }else { id(call_accept).execute();
-              }
-#            script.execute: call_accept
+#            lambda: |-
+#              if (id(mute_mode)) { id(call_accept_mute).execute(); 
+#              }else { id(call_accept).execute();
+#              }
+            script.execute: call_accept
       - if:
           condition:
             switch.is_on: auto_open_once
           then:
             - lambda: |-
-                if (id(mute_mode)) { id(call_accept_mute).execute(); # скрипт открытия разный для беззвучного режима и обычного
+                if (id(mute_mode)) { id(call_accept_mute).execute(); 
                 }else { id(call_accept).execute();
                 }          
 #            - script.execute: call_accept
@@ -519,5 +519,3 @@ text_sensor:
     update_interval: 60s
     icon: mdi:clock-start
     
-
-  
