@@ -1,0 +1,479 @@
+# Smart Intercom project
+# https://github.com/Ge1mer/domofon/
+
+############# User configuration #############
+
+substitutions:
+  
+  board: esp12e
+  pin_relay_answer: GPIO14
+  pin_relay_mute: GPIO12
+  pin_relay_phone: GPIO16
+  pin_led_red: GPIO5
+  pin_led_green: GPIO4
+  pin_led_blue: GPIO15
+  pin_call_detect: GPIO13
+  pin_btn_accept: GPIO0
+
+  # Relays configuration
+  relays_inverted: 'false'
+
+  # Wifi credentials
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  ap_ssid: "Domofon"
+  ap_password: "1234567890"
+
+  # OTA and API
+  ota_password: "esphome"
+  api_password: "esphome"
+
+  # Software configuration
+  call_end_detect_delay: 3000ms     # Interval between rings to detect incoming call
+  relay_before_answer_delay: 10ms   # Delay before answer call
+  relay_answer_on_time: 1000ms      # Delay between answer call and open/close door
+  relay_open_on_time: 8ms           # How long the "open door button" will be pressed
+  relay_reset_state: 1000ms         # Delay to reset state         
+  relay_after_open_delay: 500ms     # Delay in "answer" state after opening door
+  short_click_time_from: 50ms       # Short button click min time
+  short_click_time_to: 1000ms       # Long button click min time
+
+########### End user configuration ###########
+
+esphome:
+  name: domofon
+  platform: ESP8266
+  board: $board
+  on_boot:
+    priority: -10
+    then:
+      - output.turn_on: relay_phone
+      - output.turn_off: relay_answer
+      - output.turn_off: relay_mute
+      - script.execute: led_off
+      
+globals:
+   - id: mute_mode
+     type: bool
+     initial_value: 'false'
+   - id: green_led
+     type: int
+     initial_value: '100'
+
+wifi:
+  ssid: $wifi_ssid
+  password: $wifi_password
+  fast_connect: on
+  
+  manual_ip:
+    static_ip: 192.168.1.128
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+  
+  ap:
+    ssid: $ap_ssid
+    password: $ap_password
+    
+captive_portal:
+
+logger:
+
+ota:
+  password: $ota_password
+
+# Blue status led
+status_led:
+  pin: $pin_led_blue
+
+api:
+  password: $api_password
+#  reboot_timeout: 0s
+  services:
+    # Accept call service for Home Assistant
+    - service: accept_call
+      then:
+        - logger.log: "Call service 'Accept Call'"
+        - if:
+            condition:
+              binary_sensor.is_on: incoming_call
+            then: 
+              lambda: |-
+                if (id(mute_mode)) { id(call_accept_mute).execute(); 
+                }else { id(call_accept).execute();
+                }
+#            then: 
+#              script.execute: call_accept  
+            else:
+              logger.log: "No incoming call"
+
+    # Reject call service for Home Assistant
+    - service: reject_call
+      then:
+        - logger.log: "Call service 'Reject Call'"
+        - if:
+            condition:
+              binary_sensor.is_on: incoming_call
+            then:
+              script.execute: call_reject
+            else:
+              logger.log: "No incoming call"
+
+script:
+  # Accept incoming call
+  - id: call_accept
+    then:
+      - logger.log: "Accept call"
+      - script.execute: state_no_call
+      - output.turn_on: relay_answer     # включаем реле 300 ом (ответ)
+      - delay: $relay_before_answer_delay
+      - output.turn_off: relay_phone    # отключаем трубку
+      - delay: $relay_answer_on_time
+      - output.turn_off: relay_answer    # отключаем реле 300 ом (открыть) на 8 милисекунд
+      - delay: $relay_open_on_time
+      - output.turn_on: relay_answer    # 
+      - delay: $relay_answer_on_time
+      - output.turn_off: relay_answer   # отключаем реле 300 ом, возврат в исходное
+      - delay: $relay_reset_state
+      - output.turn_on: relay_phone    # включаем трубку
+
+  # Reject incoming call
+  - id: call_reject
+    then:
+      - logger.log: "Reject call"
+      - script.execute: state_no_call
+      - delay: $relay_before_answer_delay
+      - output.turn_on: relay_answer     # включаем реле 300 ом (ответ)
+      - delay: $relay_before_answer_delay
+      - output.turn_off: relay_phone    # отключаем трубку
+      - delay: $relay_answer_on_time
+      - output.turn_off: relay_answer   # отключаем реле 300 ом, возврат в исходное
+      - delay: $relay_reset_state
+      - output.turn_on: relay_phone    # включаем трубку
+
+
+  # No call state
+  - id: state_no_call
+    then:
+      - logger.log: "Set state 'No call'"
+      - script.execute: led_off
+      - if:
+          condition:
+            switch.is_on: auto_open_once
+          then:
+            script.execute: led_green_soft
+      - if:
+          condition:
+            switch.is_on: auto_open
+          then:
+            script.execute: led_yellow_soft
+      - if:
+          condition:
+            switch.is_on: auto_reject
+          then:
+            script.execute: led_red_on_soft
+      - if:
+          condition:
+            and:
+              - switch.is_off: auto_open_once
+              - switch.is_off: auto_open
+              - switch.is_off: auto_reject
+          then:
+            script.execute: led_off
+
+  # Call state
+  - id: state_call
+    then:
+      - logger.log: "Set state 'Incoming call'"
+      - script.execute: led_off
+      - if:
+          condition:
+            and:
+              - switch.is_off: auto_open
+              - switch.is_off: auto_open_once
+              - switch.is_off: auto_reject
+          then:
+            script.execute: led_blink_red_1_on
+      - if:
+          condition:
+            switch.is_on: auto_reject
+          then:
+            script.execute: call_reject
+      - if:
+          condition:
+            switch.is_on: auto_open
+          then:
+            script.execute: call_accept
+      - if:
+          condition:
+            switch.is_on: auto_open_once
+          then:
+            - script.execute: call_accept
+            - delay: 1s
+            - switch.turn_off: auto_open_once
+
+  # Once blink green led with one flash
+  - id: led_green_soft
+    then:
+      - light.turn_on:
+          id: rgb_led
+          brightness: 50%
+          red: 0%
+          green: 100%
+          blue: 0%
+          transition_length: 100ms
+
+
+  # Permanent on green led with soft brightness
+  - id: led_yellow_soft
+    then:
+      light.turn_on:
+        id: rgb_led
+        brightness: 50%
+        red: 100%
+        green: 100%
+        blue: 0%
+        transition_length: 100ms
+
+  # Permanent blink red led with one flash
+  - id: led_blink_red_1_on
+    then:
+      light.turn_on:
+        id: rgb_led
+        brightness: 50%
+        red: 100%
+        green: 0%
+        blue: 0%
+#        transition_length: 100ms
+
+  # Permanent on red led with soft brightness
+  - id: led_red_on_soft
+    then:
+      light.turn_on:
+        id: rgb_led
+        brightness: 50%
+        red: 100%
+        green: 0%
+        blue: 100%
+        transition_length: 100ms
+        
+
+  # Turn off leds
+  - id: led_off
+    then:
+      light.turn_on:
+        id: rgb_led
+        brightness: 10%
+        red: 100%
+        green: 100%
+        blue: 100%
+
+      
+        
+#      light.turn_off:
+#        id: rgb_led
+#        transition_length: 100ms
+
+
+switch:
+
+  # Automatically open door switch
+  - platform: template
+    name: "Domofon automatically open"
+    id: auto_open
+    icon: "mdi:door-open"
+    optimistic: true
+    restore_state: true
+    on_turn_on:
+      - switch.turn_off: auto_open_once
+      - switch.turn_off: auto_reject
+      - script.execute: state_no_call
+    on_turn_off:
+      script.execute: state_no_call
+
+  # Automatically open door once switch
+  - platform: template
+    name: "Domofon automatically open once"
+    id: auto_open_once
+    icon: "mdi:door-open"
+    optimistic: true
+    restore_state: true
+    on_turn_on:
+      - switch.turn_off: auto_open
+      - switch.turn_off: auto_reject
+      - script.execute: state_no_call
+    on_turn_off:
+      script.execute: state_no_call
+
+  # Automatically reject call switch
+  - platform: template
+    name: "Domofon automatically reject"
+    id: auto_reject
+    icon: "mdi:door-closed-lock"
+    optimistic: true
+    restore_state: true
+    on_turn_on:
+      - switch.turn_off: auto_open
+      - switch.turn_off: auto_open_once
+      - script.execute: state_no_call
+    on_turn_off:
+      script.execute: state_no_call
+
+  - platform: restart
+    name: "Domofon restart"
+
+# RGB Led (not exported to Home Assistant)
+light:
+  - platform: rgb
+    id: rgb_led
+    name: "Domofon led"
+    internal: true
+    restore_mode: ALWAYS_OFF
+    red: led_red
+    green: led_green
+    blue: led_blue
+
+
+output:
+  # Red LED
+  - platform: esp8266_pwm
+    id: led_red
+    pin:
+      number: $pin_led_red
+      mode: OUTPUT
+
+  # Green LED
+  - platform: esp8266_pwm
+    id: led_green
+    pin:
+      number: $pin_led_green
+      mode: OUTPUT
+
+  # Blue LED
+  - platform: esp8266_pwm
+    id: led_blue
+    pin:
+      number: $pin_led_blue
+      mode: OUTPUT
+
+  # Relay answer
+  - platform: gpio
+    id: relay_answer
+    pin:
+      number: $pin_relay_answer
+      mode: OUTPUT
+      inverted: $relays_inverted
+
+  # Relay door open
+  - platform: gpio
+    id: relay_mute
+    pin:
+      number: $pin_relay_mute
+      mode: OUTPUT
+      inverted: $relays_inverted
+      
+  - platform: gpio
+    id: relay_phone
+    pin:
+      number: $pin_relay_phone
+      mode: OUTPUT
+      inverted: $relays_inverted    
+
+binary_sensor:
+  # Call detection
+  - platform: gpio
+    name: "Domofon incoming call"
+    id: incoming_call
+    device_class: lock
+    pin:
+      number: $pin_call_detect
+      mode: INPUT_PULLUP
+      inverted: True
+    filters:
+      delayed_off: $call_end_detect_delay
+    on_press:
+      then:
+        script.execute: state_call
+    on_release:
+      then:
+        script.execute: state_no_call
+
+  # Accept HW button
+  - platform: gpio
+    name: "Domofon button"
+    id: button
+    pin:
+      number: $pin_btn_accept
+      mode: INPUT_PULLUP
+      inverted: True
+    filters:
+      delayed_on: 25ms
+    on_multi_click:
+      # Short click - open door or enable once auto opening
+      - timing:
+        - ON for $short_click_time_from to $short_click_time_to
+        then:
+          if:
+            condition:
+              binary_sensor.is_on: incoming_call
+            then:
+              script.execute: call_accept
+            else:
+              if:
+                condition:
+                  switch.is_on: auto_open_once
+                then:
+                  switch.turn_on: auto_open
+                else:
+                  if:
+                    condition:
+                      switch.is_on: auto_open
+                    then:
+                      switch.turn_on: auto_reject
+                    else:
+                      switch.turn_on: auto_open_once
+      # Long click - disable auto opening
+      - timing:
+        - ON for at least $short_click_time_to
+        then:
+          if:
+            condition:
+              binary_sensor.is_on: incoming_call
+            then:
+              script.execute: call_reject
+            else:
+              - switch.turn_off: auto_open
+              - switch.turn_off: auto_open_once
+              - switch.turn_off: auto_reject
+              - script.execute: led_green_soft
+sensor:
+  - platform: wifi_signal
+    name: "Domofon WiFi Signal"
+    update_interval: 60s
+    
+  - platform: uptime
+    id: device_uptime
+    internal: true
+#    name: "Meteostation uptime"
+
+text_sensor:
+
+  - platform: template
+    name: "Domofon uptime"
+    lambda: |-
+      uint32_t uptime = (id(device_uptime).state);
+      int minutes = (uptime % 3600) / 60;
+      int hours = (uptime % 86400) / 3600;
+      int days = uptime / 86400;
+      if (days > 0) {
+        return { (String(days) + " д." + String(hours) + " ч." + String(minutes) + " мин.").c_str() };
+      }
+      if (hours > 0) {
+        return { (String(hours) + " ч. " + String(minutes) + " мин.").c_str() };
+      } else {
+        return { (String(minutes) + " мин.").c_str() };
+      }
+    update_interval: 60s
+    icon: mdi:clock-start
+    
+
+  
