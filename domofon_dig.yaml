@@ -97,12 +97,12 @@ api:
             condition:
               binary_sensor.is_on: incoming_call
             then: 
-              lambda: |-
-                if (id(mute_mode)) { id(call_accept_mute).execute(); 
-                }else { id(call_accept).execute();
-                }
+#              lambda: |-
+#                if (id(mute_mode)) { id(call_accept_mute).execute(); 
+#                }else { id(call_accept).execute();
+#                }
 #            then: 
-#              script.execute: call_accept  
+              script.execute: call_accept  
             else:
               logger.log: "No incoming call"
 
