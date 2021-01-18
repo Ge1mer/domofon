@@ -1,6 +1,9 @@
 # Умный домофон на ESP8266 (версия на [ESPHome](https://esphome.io/))
 [Доработка проекта](https://github.com/Anonym-tsk/smart-domofon/)
 
+Подключаем трубку по следующей [схеме:](https://github.com/Ge1mer/domofon/blob/master/domofon.yaml)
+
+
 ## Кнопка и индикация
 * Красный цвет мигает
     * Входящий вызов
