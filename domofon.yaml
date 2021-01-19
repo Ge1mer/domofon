@@ -64,10 +64,10 @@ wifi:
   password: $wifi_password
   fast_connect: on
   
-  manual_ip:
-    static_ip: 192.168.1.128
-    gateway: 192.168.1.1
-    subnet: 255.255.255.0
+#  manual_ip:
+#    static_ip: 192.168.1.128
+#    gateway: 192.168.1.1
+#    subnet: 255.255.255.0
   
   ap:
     ssid: $ap_ssid
