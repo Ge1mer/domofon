@@ -95,13 +95,11 @@ api:
         - if:
             condition:
               binary_sensor.is_on: incoming_call
-            then: 
+            then:
               lambda: |-
-                if (id(mute_mode)) { id(call_accept_mute).execute(); 
+                if (id(mute_mode)) { id(call_accept_mute).execute();
                 }else { id(call_accept).execute();
                 }
-#            then: 
-#              script.execute: call_accept  
             else:
               logger.log: "No incoming call"
 
@@ -113,7 +111,10 @@ api:
             condition:
               binary_sensor.is_on: incoming_call
             then:
-              script.execute: call_reject
+              lambda: |-
+                if (id(mute_mode)) { id(call_reject_mute).execute();
+                }else { id(call_reject).execute();
+                }
             else:
               logger.log: "No incoming call"
 
@@ -130,8 +131,7 @@ script:
       - output.turn_off: relay_answer    # отключаем реле 300 ом (открыть)
       - delay: $relay_open_on_time
       - output.turn_on: relay_phone    # включаем трубку
-  
-  
+
   - id: call_accept_mute
     then:
       - logger.log: "Accept call"
@@ -143,21 +143,30 @@ script:
       - output.turn_off: relay_answer    # отключаем реле 300 ом (открыть)
       - delay: $relay_open_on_time
       - output.turn_on: relay_mute     # включаем вирт трубку
-    
-
-
 
   # Reject incoming call
   - id: call_reject
     then:
       - logger.log: "Reject call"
       - script.execute: state_no_call
-      - delay: $relay_before_answer_delay
       - output.turn_on: relay_answer     # включаем реле 300 ом (ответ)
       - delay: $relay_before_answer_delay
       - output.turn_off: relay_phone    # отключаем трубку
       - delay: $relay_answer_on_time
       - output.turn_on: relay_phone    # включаем трубку
+      - delay: $relay_answer_on_time
+      - output.turn_off: relay_answer    # отключаем реле 300 ом
+
+    # Reject incoming call mute
+  - id: call_reject_mute
+    then:
+      - logger.log: "Reject call"
+      - script.execute: state_no_call
+      - output.turn_on: relay_answer     # включаем реле 300 ом (ответ)
+      - delay: $relay_before_answer_delay
+      - output.turn_off: relay_mute    # отключаем вирт трубку
+      - delay: $relay_answer_on_time
+      - output.turn_on: relay_mute    # включаем вирт трубку
       - delay: $relay_answer_on_time
       - output.turn_off: relay_answer    # отключаем реле 300 ом
 
@@ -207,25 +216,26 @@ script:
           condition:
             switch.is_on: auto_reject
           then:
-            script.execute: call_reject
+            lambda: |-
+              if (id(mute_mode)) { id(call_reject_mute).execute();
+              }else { id(call_reject).execute();
+              }
       - if:
           condition:
             switch.is_on: auto_open
           then:
-#            lambda: |-
-#              if (id(mute_mode)) { id(call_accept_mute).execute(); 
-#              }else { id(call_accept).execute();
-#              }
-            script.execute: call_accept
+            lambda: |-
+              if (id(mute_mode)) { id(call_accept_mute).execute();
+              }else { id(call_accept).execute();
+              }
       - if:
           condition:
             switch.is_on: auto_open_once
           then:
             - lambda: |-
-                if (id(mute_mode)) { id(call_accept_mute).execute(); 
+                if (id(mute_mode)) { id(call_accept_mute).execute();
                 }else { id(call_accept).execute();
-                }          
-#            - script.execute: call_accept
+                }
             - delay: 1s
             - switch.turn_off: auto_open_once
 
@@ -273,7 +283,7 @@ script:
         green: 0%
         blue: 100%
         transition_length: 100ms
-        
+
 
   # Turn off leds
   - id: led_off
@@ -290,8 +300,8 @@ script:
         green: 100%
         blue: 100%
 
-      
-        
+
+
 #      light.turn_off:
 #        id: rgb_led
 #        transition_length: 100ms
@@ -340,7 +350,7 @@ switch:
       - script.execute: state_no_call
     on_turn_off:
       script.execute: state_no_call
-      
+
   - platform: template
     name: "Domofon mute"
     id: mute
@@ -361,7 +371,7 @@ switch:
       - output.turn_off: relay_mute
       - output.turn_on: relay_phone
       - script.execute: led_off
-  
+
   - platform: restart
     name: "Domofon restart"
 
@@ -414,13 +424,13 @@ output:
       number: $pin_relay_mute
       mode: OUTPUT
       inverted: $relays_inverted
-      
+
   - platform: gpio
     id: relay_phone
     pin:
       number: $pin_relay_phone
       mode: OUTPUT
-      inverted: $relays_inverted    
+      inverted: $relays_inverted
 
 binary_sensor:
   # Call detection
@@ -493,7 +503,7 @@ sensor:
   - platform: wifi_signal
     name: "Domofon WiFi Signal"
     update_interval: 60s
-    
+
   - platform: uptime
     id: device_uptime
     internal: true
@@ -518,4 +528,4 @@ text_sensor:
       }
     update_interval: 60s
     icon: mdi:clock-start
-    
+
